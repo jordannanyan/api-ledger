@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
-import bcrypt from 'bcrypt';
 import pool from '../db/connection';
-import { authenticate } from '../middleware/auth';
+import { authenticate, hashPassword } from '../middleware/auth';
 
 export const router = Router();
 
@@ -29,7 +28,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
   if (password && password.length < 8) {
     return res.status(422).json({ message: 'Validation error', errors: { password: ['min 8 characters'] } });
   }
-  const hash = password ? await bcrypt.hash(password, 12) : null;
+  const hash = password ? await hashPassword(password) : null;
   const [result] = await pool.query(
     'INSERT INTO entities (entities_name, location, username, password, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
     [entities_name ?? null, location ?? null, username ?? null, hash]
@@ -56,7 +55,7 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
   if (b.entities_name !== undefined) updates.entities_name = b.entities_name;
   if (b.location !== undefined)      updates.location      = b.location;
   if (b.username !== undefined)      updates.username      = b.username;
-  if (b.password !== undefined)      updates.password      = await bcrypt.hash(b.password, 12);
+  if (b.password !== undefined)      updates.password      = await hashPassword(b.password);
 
   const keys = Object.keys(updates);
   if (keys.length) {

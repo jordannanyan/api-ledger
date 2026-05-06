@@ -1,10 +1,9 @@
 import { Router, Request, Response } from 'express';
-import bcrypt from 'bcrypt';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import pool from '../db/connection';
-import { authenticate } from '../middleware/auth';
+import { authenticate, hashPassword } from '../middleware/auth';
 import { fileToPath } from '../middleware/upload';
 
 export const router = Router();
@@ -104,7 +103,7 @@ router.post('/', authenticate, farmerUpload, async (req: Request, res: Response)
       farmer_name:        b.farmer_name ?? null,
       no_hp:              b.no_hp ?? null,
       nik:                b.nik,
-      password:           await bcrypt.hash(b.password, 12),
+      password:           await hashPassword(b.password),
       address:            b.address ?? null,
       previous_income:    b.previous_income != null ? Number(b.previous_income) : null,
       kth_id:             Number(b.kth_id),
@@ -159,7 +158,7 @@ router.put('/:id', authenticate, farmerUpload, async (req: Request, res: Respons
     set('date_of_birth',      b.date_of_birth);
     set('pre_finance',        b.pre_finance != null ? (b.pre_finance === 'true' || b.pre_finance === true || Number(b.pre_finance) === 1 ? 1 : 0) : undefined);
     set('no_rek',             b.no_rek);
-    if (b.password !== undefined) updates.password = await bcrypt.hash(b.password, 12);
+    if (b.password !== undefined) updates.password = await hashPassword(b.password);
 
     if (req.file) {
       // Delete old photo if exists & lives in our farmers_photos dir

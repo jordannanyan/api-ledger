@@ -1,6 +1,27 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import pool from '../db/connection';
+
+// -----------------------------------------------------------------------------
+// Password hashing — Laravel-compatible.
+//
+// Laravel uses `$2y$` prefix bcrypt. Node's native `bcrypt` (kelektiv) sometimes
+// has issues comparing `$2y$` hashes; `bcryptjs` (pure JS) handles all variants
+// ($2a$, $2b$, $2x$, $2y$) natively.
+//
+// hashPassword() normalizes the prefix to `$2y$` so Laravel's `Hash::check()`
+// reads it cleanly, and TS-issued hashes are visually identical to Laravel ones.
+// -----------------------------------------------------------------------------
+export async function hashPassword(plain: string): Promise<string> {
+  const hash = await bcrypt.hash(plain, 12);
+  return hash.replace(/^\$2[abxy]\$/, '$2y$');
+}
+
+export async function comparePassword(plain: string, hash: string): Promise<boolean> {
+  if (!hash) return false;
+  return bcrypt.compare(plain, hash);
+}
 
 // Sanctum-compatible auth: tokens live in `personal_access_tokens` (shared with Laravel).
 // Token format: "{id}|{plaintext}". DB stores sha256(plaintext).

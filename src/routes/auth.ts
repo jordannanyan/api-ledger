@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
-import bcrypt from 'bcrypt';
 import pool from '../db/connection';
-import { authenticate, issueSanctumToken } from '../middleware/auth';
+import { authenticate, issueSanctumToken, comparePassword } from '../middleware/auth';
 
 export const router = Router();
 
@@ -17,7 +16,7 @@ router.post('/login/entity', async (req: Request, res: Response) => {
       [username]
     );
     const list = rows as any[];
-    if (!list.length || !(await bcrypt.compare(password, list[0].password))) {
+    if (!list.length || !(await comparePassword(password, list[0].password))) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
     const entity = list[0];
@@ -38,7 +37,7 @@ router.post('/login/kth', async (req: Request, res: Response) => {
   try {
     const [rows] = await pool.query('SELECT * FROM kth WHERE username = ? LIMIT 1', [username]);
     const list = rows as any[];
-    if (!list.length || !(await bcrypt.compare(password, list[0].password))) {
+    if (!list.length || !(await comparePassword(password, list[0].password))) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
     const kth = list[0];
@@ -59,7 +58,7 @@ router.post('/login/farmer', async (req: Request, res: Response) => {
   try {
     const [rows] = await pool.query('SELECT * FROM farmers WHERE nik = ? LIMIT 1', [nik]);
     const list = rows as any[];
-    if (!list.length || !(await bcrypt.compare(password, list[0].password))) {
+    if (!list.length || !(await comparePassword(password, list[0].password))) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
     const farmer = list[0];

@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
-import bcrypt from 'bcrypt';
 import pool from '../db/connection';
-import { authenticate } from '../middleware/auth';
+import { authenticate, hashPassword } from '../middleware/auth';
 
 export const router = Router();
 
@@ -53,7 +52,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
   if (b.password && b.password.length < 8) {
     return res.status(422).json({ message: 'Validation error', errors: { password: ['min 8 characters'] } });
   }
-  const hash = b.password ? await bcrypt.hash(b.password, 12) : null;
+  const hash = b.password ? await hashPassword(b.password) : null;
   const [result] = await pool.query(
     `INSERT INTO kth (kth_name, address, regency, partnership_period, entities_id, username, password, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
@@ -81,7 +80,7 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
   for (const k of ['kth_name','address','regency','partnership_period','entities_id','username']) {
     if (b[k] !== undefined) updates[k] = k === 'entities_id' ? Number(b[k]) : b[k];
   }
-  if (b.password !== undefined) updates.password = await bcrypt.hash(b.password, 12);
+  if (b.password !== undefined) updates.password = await hashPassword(b.password);
 
   const keys = Object.keys(updates);
   if (keys.length) {
