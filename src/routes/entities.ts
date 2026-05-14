@@ -1,8 +1,14 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
 import pool from '../db/connection';
 import { authenticate, hashPassword } from '../middleware/auth';
 
 export const router = Router();
+
+// Parse multipart/form-data fields (no files). Required because the PHP web client
+// (app-snbs-lampung) uses cURL CURLOPT_POSTFIELDS with an array, which sends
+// multipart/form-data even for resources without file uploads.
+const parseFields = multer().none();
 
 const stripPwd = (row: any) => { if (row) delete row.password; return row; };
 
@@ -19,7 +25,7 @@ router.get('/:id', authenticate, async (req: Request, res: Response) => {
   return res.json({ message: 'Entity fetched successfully', data: stripPwd(list[0]) });
 });
 
-router.post('/', authenticate, async (req: Request, res: Response) => {
+router.post('/', authenticate, parseFields, async (req: Request, res: Response) => {
   const { entities_name, location, username, password } = req.body || {};
   if (username) {
     const [dup] = await pool.query('SELECT id FROM entities WHERE username = ?', [username]);
@@ -38,7 +44,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
   return res.status(201).json({ message: 'Entity created successfully', data: stripPwd((rows as any[])[0]) });
 });
 
-router.put('/:id', authenticate, async (req: Request, res: Response) => {
+router.put('/:id', authenticate, parseFields, async (req: Request, res: Response) => {
   const id = req.params.id;
   const [exists] = await pool.query('SELECT id FROM entities WHERE id = ?', [id]);
   if (!(exists as any[]).length) return res.status(404).json({ message: 'Entity not found' });

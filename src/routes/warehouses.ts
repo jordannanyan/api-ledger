@@ -33,7 +33,7 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
   return res.json((rows as any[]).map(inflate));
 });
 
-router.get('/by-kth/:kth_id', authenticate, async (req: Request, res: Response) => {
+router.get(['/by-kth/:kth_id', '/kth/:kth_id'], authenticate, async (req: Request, res: Response) => {
   const [rows] = await pool.query(SELECT_WITH_KTH + ' WHERE w.kth_id = ?', [req.params.kth_id]);
   const data = (rows as any[]).map(inflate);
   if (!data.length) return res.status(404).json({ message: 'No warehouses found for the given KTH ID' });
@@ -61,7 +61,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
   return res.status(201).json({ message: 'Warehouse created successfully', data: inflate((rows as any[])[0]) });
 });
 
-router.put('/:id', authenticate, async (req: Request, res: Response) => {
+const updateWarehouse = async (req: Request, res: Response) => {
   const id = req.params.id;
   const [exists] = await pool.query('SELECT id FROM warehouse WHERE id = ?', [id]);
   if (!(exists as any[]).length) return res.status(404).json({ message: 'Warehouse not found' });
@@ -82,6 +82,16 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
   }
   const [rows] = await pool.query(SELECT_WITH_KTH + ' WHERE w.id = ?', [id]);
   return res.json({ message: 'Warehouse updated successfully', data: inflate((rows as any[])[0]) });
+};
+
+router.put('/:id', authenticate, updateWarehouse);
+
+// Laravel method-spoofing compatibility: POST /:id with body _method=PUT
+router.post('/:id', authenticate, (req: Request, res: Response) => {
+  if (String(req.body?._method || req.query?._method || '').toUpperCase() === 'PUT') {
+    return updateWarehouse(req, res);
+  }
+  return res.status(404).json({ message: `Not found: POST ${req.originalUrl}` });
 });
 
 router.delete('/:id', authenticate, async (req: Request, res: Response) => {

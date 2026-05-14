@@ -69,8 +69,8 @@ router.get('/:id', authenticate, async (req: Request, res: Response) => {
   return res.json({ message: 'Selling record fetched successfully', data: inflate(list[0]) });
 });
 
-// GET /api/selling/by-kth/:kth_id
-router.get('/by-kth/:kth_id', authenticate, async (req: Request, res: Response) => {
+// GET /api/selling/by-kth/:kth_id  (also legacy alias: /kth/:kth_id)
+router.get(['/by-kth/:kth_id', '/kth/:kth_id'], authenticate, async (req: Request, res: Response) => {
   const [rows] = await pool.query(SELECT_WITH_RELATIONS + ' WHERE w.kth_id = ? ORDER BY s.date DESC, s.id DESC', [req.params.kth_id]);
   const data = (rows as any[]).map(inflate);
   if (!data.length) return res.status(404).json({ status: 'error', message: 'No selling records found for the specified KTH ID.' });
@@ -130,8 +130,8 @@ router.post('/', authenticate, fileUploads, async (req: Request, res: Response) 
   }
 });
 
-// PUT /api/selling/:id
-router.put('/:id', authenticate, fileUploads, async (req: Request, res: Response) => {
+// PUT /api/selling/:id  (Flutter uses POST /:id + _method=PUT — see route below)
+const updateSelling = async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
     const [exists] = await pool.query('SELECT id FROM selling WHERE id = ? LIMIT 1', [id]);
@@ -201,6 +201,16 @@ router.put('/:id', authenticate, fileUploads, async (req: Request, res: Response
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
+};
+
+router.put('/:id', authenticate, fileUploads, updateSelling);
+
+// Laravel method-spoofing compatibility: POST /:id with body _method=PUT
+router.post('/:id', authenticate, fileUploads, (req: Request, res: Response) => {
+  if (String(req.body?._method || req.query?._method || '').toUpperCase() === 'PUT') {
+    return updateSelling(req, res);
+  }
+  return res.status(404).json({ message: `Not found: POST ${req.originalUrl}` });
 });
 
 // DELETE /api/selling/:id

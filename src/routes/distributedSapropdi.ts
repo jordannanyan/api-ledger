@@ -81,8 +81,8 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
   return res.json((rows as any[]).map(inflate));
 });
 
-// GET /api/distributed-sapropdi/by-plot/:plot_id
-router.get('/by-plot/:plot_id', authenticate, async (req: Request, res: Response) => {
+// GET /api/distributed-sapropdi/by-plot/:plot_id  (also legacy alias: /plot/:plot_id)
+router.get(['/by-plot/:plot_id', '/plot/:plot_id'], authenticate, async (req: Request, res: Response) => {
   const [rows] = await pool.query(SELECT_WITH_RELATIONS + ' WHERE d.plot_id = ?', [req.params.plot_id]);
   const data = (rows as any[]).map(inflate);
   if (!data.length) return res.status(404).json({ status: 'error', message: 'No distributed sapropdi found for the specified plot_id.' });
@@ -124,7 +124,7 @@ router.post('/', authenticate, proofUpload, async (req: Request, res: Response) 
   }
 });
 
-router.put('/:id', authenticate, proofUpload, async (req: Request, res: Response) => {
+const updateDistSapropdi = async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
     const [exists] = await pool.query('SELECT id FROM distributed_sapropdi WHERE id = ?', [id]);
@@ -155,6 +155,16 @@ router.put('/:id', authenticate, proofUpload, async (req: Request, res: Response
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
+};
+
+router.put('/:id', authenticate, proofUpload, updateDistSapropdi);
+
+// Laravel method-spoofing compatibility: POST /:id with body or query _method=PUT
+router.post('/:id', authenticate, proofUpload, (req: Request, res: Response) => {
+  if (String(req.body?._method || req.query?._method || '').toUpperCase() === 'PUT') {
+    return updateDistSapropdi(req, res);
+  }
+  return res.status(404).json({ message: `Not found: POST ${req.originalUrl}` });
 });
 
 router.delete('/:id', authenticate, async (req: Request, res: Response) => {

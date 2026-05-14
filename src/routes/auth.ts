@@ -1,8 +1,46 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import pool from '../db/connection';
 import { authenticate, issueSanctumToken, comparePassword } from '../middleware/auth';
 
 export const router = Router();
+
+// POST /api/check-token — verify token without consuming it (Laravel LoginController::checkToken).
+// Public endpoint (does not require auth middleware — it's the verifier itself).
+router.post('/check-token', async (req: Request, res: Response) => {
+  const header = req.headers.authorization || '';
+  const fromHeader = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
+  const tokenString = (req.body?.token || fromHeader || '').toString().trim();
+  if (!tokenString) {
+    return res.status(401).json({ valid: false, message: 'Token not provided.' });
+  }
+  const parts = tokenString.split('|');
+  if (parts.length !== 2) {
+    return res.status(401).json({ valid: false, message: 'Invalid token format.' });
+  }
+  const [tokenId, plaintext] = parts;
+  const hashed = crypto.createHash('sha256').update(plaintext).digest('hex');
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, tokenable_type, tokenable_id, expires_at FROM personal_access_tokens WHERE id = ? AND token = ? LIMIT 1',
+      [tokenId, hashed]
+    );
+    const list = rows as any[];
+    if (!list.length) return res.status(401).json({ valid: false, message: 'Invalid token.' });
+    const tk = list[0];
+    if (tk.expires_at && new Date(tk.expires_at) < new Date()) {
+      return res.status(401).json({ valid: false, message: 'Token expired.' });
+    }
+    return res.json({
+      valid: true,
+      tokenable_type: tk.tokenable_type,
+      tokenable_id: tk.tokenable_id,
+      expires_at: tk.expires_at,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ valid: false, message: 'Server error', error: err.message });
+  }
+});
 
 // POST /api/login/entity
 router.post('/login/entity', async (req: Request, res: Response) => {
@@ -21,6 +59,8 @@ router.post('/login/entity', async (req: Request, res: Response) => {
     }
     const entity = list[0];
     delete entity.password;
+    // Normalize: column may be 0/1 from MySQL → boolean (defaults to false if column missing)
+    entity.is_superadmin = !!entity.is_superadmin;
     const token = await issueSanctumToken('App\\Models\\Entities', entity.id, 'entity-auth-token');
     return res.json({ message: 'Login successful', token, entity });
   } catch (err: any) {

@@ -82,8 +82,8 @@ router.get('/:id', authenticate, async (req: Request, res: Response) => {
   return res.json({ message: 'Purchasing record fetched successfully', data: inflateRelations(list[0]) });
 });
 
-// GET /api/purchasing/by-kth/:kth_id
-router.get('/by-kth/:kth_id', authenticate, async (req: Request, res: Response) => {
+// GET /api/purchasing/by-kth/:kth_id  (also legacy alias: /kth/:kth_id)
+router.get(['/by-kth/:kth_id', '/kth/:kth_id'], authenticate, async (req: Request, res: Response) => {
   const status = req.query.status as string | undefined;
   if (status && !STATUSES.includes(status as any)) {
     return res.status(422).json({ status: 'error', message: 'Invalid status filter.' });
@@ -98,8 +98,8 @@ router.get('/by-kth/:kth_id', authenticate, async (req: Request, res: Response) 
   return res.json({ status: 'success', data });
 });
 
-// GET /api/purchasing/by-farmer/:farmer_id
-router.get('/by-farmer/:farmer_id', authenticate, async (req: Request, res: Response) => {
+// GET /api/purchasing/by-farmer/:farmer_id  (also legacy alias: /farmer/:farmer_id)
+router.get(['/by-farmer/:farmer_id', '/farmer/:farmer_id'], authenticate, async (req: Request, res: Response) => {
   const status = req.query.status as string | undefined;
   if (status && !STATUSES.includes(status as any)) {
     return res.status(422).json({ status: 'error', message: 'Invalid status filter.' });
@@ -170,8 +170,8 @@ router.post('/', authenticate, proofUploads, async (req: Request, res: Response)
   }
 });
 
-// PUT /api/purchasing/:id
-router.put('/:id', authenticate, proofUploads, async (req: Request, res: Response) => {
+// PUT /api/purchasing/:id  (Flutter uses POST /:id + _method=PUT — see route below)
+const updatePurchasing = async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
     const [exists] = await pool.query('SELECT id FROM purchasing WHERE id = ? LIMIT 1', [id]);
@@ -229,6 +229,16 @@ router.put('/:id', authenticate, proofUploads, async (req: Request, res: Respons
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
+};
+
+router.put('/:id', authenticate, proofUploads, updatePurchasing);
+
+// Laravel method-spoofing compatibility: POST /:id with body _method=PUT
+router.post('/:id', authenticate, proofUploads, (req: Request, res: Response) => {
+  if (String(req.body?._method || req.query?._method || '').toUpperCase() === 'PUT') {
+    return updatePurchasing(req, res);
+  }
+  return res.status(404).json({ message: `Not found: POST ${req.originalUrl}` });
 });
 
 // DELETE /api/purchasing/:id

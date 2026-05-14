@@ -34,6 +34,19 @@ app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Laravel method-spoofing (query string variant): POST ...?_method=PUT|DELETE → rewrite method.
+// Handles PHP web app (app-snbs-lampung) and Flutter cases that put _method in query.
+// Body-based _method (Flutter multipart) is handled per-route by POST /:id handlers.
+app.use((req, _res, next) => {
+  if (req.method === 'POST' && req.query && typeof req.query._method === 'string') {
+    const m = req.query._method.toUpperCase();
+    if (m === 'PUT' || m === 'DELETE' || m === 'PATCH') {
+      req.method = m;
+    }
+  }
+  next();
+});
+
 // Serve uploaded files. Default `/storage/proofs`; sibling dirs used for other types.
 const uploadPath = process.env.UPLOAD_PATH || './storage/proofs';
 const publicBase = process.env.PUBLIC_UPLOAD_BASE || '/storage/proofs';
@@ -45,6 +58,7 @@ app.use(`${storageBase}/farmers_photos`,  express.static(path.join(storageRoot, 
 app.use(`${storageBase}/trees`,           express.static(path.join(storageRoot, 'trees')));
 app.use(`${storageBase}/tree_monitorings`, express.static(path.join(storageRoot, 'tree_monitorings')));
 app.use(`${storageBase}/sapropdi_proofs`, express.static(path.join(storageRoot, 'sapropdi_proofs')));
+app.use(`${storageBase}/polygon_point_photos`, express.static(path.join(storageRoot, 'polygon_point_photos')));
 
 // Health
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'traceability-api-ts', ts: new Date().toISOString() }));
@@ -66,10 +80,13 @@ app.use('/api/entities',                     entitiesRoutes);
 app.use('/api/kth',                          kthRoutes);
 app.use('/api/offtakers',                    offtakersRoutes);
 app.use('/api/warehouses',                   warehousesRoutes);
+app.use('/api/warehouse',                    warehousesRoutes);            // legacy singular alias (Flutter app)
 app.use('/api/farmers',                      farmersRoutes);
 app.use('/api/plots',                        plotsRoutes);
 app.use('/api/daily-purchasing-prices',      dailyPurchasingPriceRoutes);
+app.use('/api/daily-purchasing-price',       dailyPurchasingPriceRoutes);  // legacy singular alias
 app.use('/api/daily-selling-prices',         dailySellingPriceRoutes);
+app.use('/api/daily-selling-price',          dailySellingPriceRoutes);     // legacy singular alias
 app.use('/api/distributed-sapropdi',         distributedSapropdiRoutes);
 
 // Trees + tree monitoring (sub-router under /api/trees/:treeId/monitorings)

@@ -1,4 +1,7 @@
 import { Router, Request, Response } from 'express';
+import path from 'path';
+import fs from 'fs';
+import multer from 'multer';
 import pool from '../db/connection';
 import { authenticate } from '../middleware/auth';
 
@@ -158,7 +161,7 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
   return res.json({ status: 'success', data });
 });
 
-router.get('/by-kth/:kth_id', authenticate, async (req: Request, res: Response) => {
+router.get(['/by-kth/:kth_id', '/kth/:kth_id'], authenticate, async (req: Request, res: Response) => {
   const [rows] = await pool.query(
     `SELECT p.id FROM plot p
      LEFT JOIN farmers f ON f.id = p.farmer_id
@@ -170,7 +173,7 @@ router.get('/by-kth/:kth_id', authenticate, async (req: Request, res: Response) 
   return res.json({ status: 'success', data });
 });
 
-router.get('/by-farmer/:farmer_id', authenticate, async (req: Request, res: Response) => {
+router.get(['/by-farmer/:farmer_id', '/farmer/:farmer_id'], authenticate, async (req: Request, res: Response) => {
   const [rows] = await pool.query('SELECT id FROM plot WHERE farmer_id = ?', [req.params.farmer_id]);
   if (!(rows as any[]).length) return res.status(404).json({ status: 'error', message: 'No plots found for the specified farmer_id.' });
   const data = await Promise.all((rows as any[]).map(r => fetchPlotFull(r.id)));
@@ -222,7 +225,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
   return res.status(201).json({ message: 'Plot created successfully', data });
 });
 
-router.put('/:id', authenticate, async (req: Request, res: Response) => {
+const updatePlot = async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const [exists] = await pool.query('SELECT id FROM plot WHERE id = ?', [id]);
   if (!(exists as any[]).length) return res.status(404).json({ message: 'Plot not found' });
@@ -269,6 +272,16 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
 
   const data = await fetchPlotFull(id);
   return res.json({ message: 'Plot updated successfully', data });
+};
+
+router.put('/:id', authenticate, updatePlot);
+
+// Laravel method-spoofing compatibility: POST /:id with body _method=PUT
+router.post('/:id', authenticate, (req: Request, res: Response) => {
+  if (String(req.body?._method || req.query?._method || '').toUpperCase() === 'PUT') {
+    return updatePlot(req, res);
+  }
+  return res.status(404).json({ message: `Not found: POST ${req.originalUrl}` });
 });
 
 router.delete('/:id', authenticate, async (req: Request, res: Response) => {
@@ -302,6 +315,63 @@ router.put('/:plotId/polygon-points', authenticate, async (req: Request, res: Re
   await applyPolygonWkt(plotId, buildPolygonWktFromPoints(v.sorted!));
   const data = await fetchPlotFull(plotId);
   return res.json({ message: 'Polygon points replaced successfully', data });
+});
+
+// POST /plots/:plotId/polygon-points/:seq/photo — upload per-point photo (Laravel: polygonPointUploadPhoto)
+const POLY_PHOTO_DIR = path.resolve(process.env.UPLOAD_PATH || './storage/proofs', '../polygon_point_photos');
+fs.mkdirSync(POLY_PHOTO_DIR, { recursive: true });
+
+const polyPhotoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, POLY_PHOTO_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, `${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`);
+  },
+});
+const polyPhotoUpload = multer({ storage: polyPhotoStorage, limits: { fileSize: 5 * 1024 * 1024 } }).single('photo');
+
+function polyPhotoToPath(file?: Express.Multer.File | null): string | null {
+  if (!file) return null;
+  const base = (process.env.PUBLIC_UPLOAD_BASE || '/storage/proofs').replace(/\/proofs$/, '/polygon_point_photos');
+  return `${base}/${file.filename}`.replace(/\\/g, '/');
+}
+
+router.post('/:plotId/polygon-points/:seq/photo', authenticate, polyPhotoUpload, async (req: Request, res: Response) => {
+  const plotId = Number(req.params.plotId);
+  const seq = Number(req.params.seq);
+  if (!req.file) return res.status(422).json({ message: 'photo file is required' });
+
+  const [existsRows] = await pool.query(
+    'SELECT id, photo_path FROM plot_polygon_points WHERE plot_id = ? AND seq = ? LIMIT 1',
+    [plotId, seq]
+  );
+  const existing = (existsRows as any[])[0];
+  if (!existing) {
+    try { fs.unlinkSync(req.file.path); } catch (_) {}
+    return res.status(404).json({ message: 'Polygon point not found' });
+  }
+
+  // Delete old photo file if local
+  if (existing.photo_path) {
+    const oldName = String(existing.photo_path).split('/').pop();
+    if (oldName) {
+      const oldPath = path.join(POLY_PHOTO_DIR, oldName);
+      if (fs.existsSync(oldPath)) { try { fs.unlinkSync(oldPath); } catch (_) {} }
+    }
+  }
+
+  const newPath = polyPhotoToPath(req.file);
+  await pool.query(
+    'UPDATE plot_polygon_points SET photo_path = ?, updated_at = NOW() WHERE id = ?',
+    [newPath, existing.id]
+  );
+
+  const [rows] = await pool.query('SELECT * FROM plot_polygon_points WHERE id = ?', [existing.id]);
+  return res.json({
+    message: 'Polygon point photo uploaded successfully',
+    data: (rows as any[])[0],
+    photo_url: newPath,
+  });
 });
 
 export default router;

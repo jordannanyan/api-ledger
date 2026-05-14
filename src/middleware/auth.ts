@@ -92,6 +92,8 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     }
     const user = userArr[0];
     delete user.password;
+    // Normalize boolean for Entities (column may be absent if migration not run)
+    if (meta.key === 'Entities') user.is_superadmin = !!user.is_superadmin;
 
     req.tokenId = tk.id;
     req.user = { id: user.id, type: meta.key, data: user };

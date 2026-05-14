@@ -71,7 +71,7 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
   return res.json((rows as any[]).map(inflate));
 });
 
-router.get('/by-entity/:entityId', authenticate, async (req: Request, res: Response) => {
+router.get(['/by-entity/:entityId', '/entity/:entityId'], authenticate, async (req: Request, res: Response) => {
   const [rows] = await pool.query(SELECT_WITH_KTH + ' WHERE k.entities_id = ?', [req.params.entityId]);
   return res.json({ message: 'Farmers fetched successfully', data: (rows as any[]).map(inflate) });
 });
@@ -126,7 +126,7 @@ router.post('/', authenticate, farmerUpload, async (req: Request, res: Response)
   }
 });
 
-router.put('/:id', authenticate, farmerUpload, async (req: Request, res: Response) => {
+const updateFarmer = async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
     const [existsRows] = await pool.query('SELECT * FROM farmers WHERE id = ?', [id]);
@@ -185,6 +185,16 @@ router.put('/:id', authenticate, farmerUpload, async (req: Request, res: Respons
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
+};
+
+router.put('/:id', authenticate, farmerUpload, updateFarmer);
+
+// Laravel method-spoofing compatibility: POST /:id with body or query _method=PUT
+router.post('/:id', authenticate, farmerUpload, (req: Request, res: Response) => {
+  if (String(req.body?._method || req.query?._method || '').toUpperCase() === 'PUT') {
+    return updateFarmer(req, res);
+  }
+  return res.status(404).json({ message: `Not found: POST ${req.originalUrl}` });
 });
 
 router.delete('/:id', authenticate, async (req: Request, res: Response) => {

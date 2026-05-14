@@ -1,8 +1,12 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
 import pool from '../db/connection';
 import { authenticate } from '../middleware/auth';
 
 export const router = Router();
+
+// Parse multipart fields (no files) — for PHP web client (cURL array → multipart).
+const parseFields = multer().none();
 
 const SELECT_WITH_ENTITY = `
   SELECT o.*,
@@ -40,7 +44,7 @@ router.get('/:id', authenticate, async (req: Request, res: Response) => {
   return res.json({ message: 'Offtaker fetched successfully', data: inflate(list[0]) });
 });
 
-router.post('/', authenticate, async (req: Request, res: Response) => {
+router.post('/', authenticate, parseFields, async (req: Request, res: Response) => {
   const b = req.body || {};
   if (b.entities_id === undefined || b.entities_id === '')
     return res.status(422).json({ message: 'entities_id is required' });
@@ -54,7 +58,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
   return res.status(201).json({ message: 'Offtaker created successfully', data: inflate((rows as any[])[0]) });
 });
 
-router.put('/:id', authenticate, async (req: Request, res: Response) => {
+router.put('/:id', authenticate, parseFields, async (req: Request, res: Response) => {
   const id = req.params.id;
   const [exists] = await pool.query('SELECT id FROM offtaker WHERE id = ?', [id]);
   if (!(exists as any[]).length) return res.status(404).json({ message: 'Offtaker not found' });

@@ -106,7 +106,7 @@ router.get('/:id', authenticate, async (req: Request, res: Response) => {
   return res.json(inflate(list[0]));
 });
 
-router.put('/:id', authenticate, monUpload, async (req: Request, res: Response) => {
+const updateTreeMonitoring = async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
     const [existsRows] = await pool.query('SELECT * FROM tree_monitoring WHERE id = ?', [id]);
@@ -152,6 +152,16 @@ router.put('/:id', authenticate, monUpload, async (req: Request, res: Response) 
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
+};
+
+router.put('/:id', authenticate, monUpload, updateTreeMonitoring);
+
+// Laravel method-spoofing compatibility: POST /:id with body or query _method=PUT
+router.post('/:id', authenticate, monUpload, (req: Request, res: Response) => {
+  if (String(req.body?._method || req.query?._method || '').toUpperCase() === 'PUT') {
+    return updateTreeMonitoring(req, res);
+  }
+  return res.status(404).json({ message: `Not found: POST ${req.originalUrl}` });
 });
 
 router.delete('/:id', authenticate, async (req: Request, res: Response) => {

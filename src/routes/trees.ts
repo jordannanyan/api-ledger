@@ -157,7 +157,7 @@ router.post('/', authenticate, treeUpload, async (req: Request, res: Response) =
   }
 });
 
-router.put('/:id', authenticate, treeUpload, async (req: Request, res: Response) => {
+const updateTree = async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
     const [existsRows] = await pool.query('SELECT * FROM trees WHERE id = ?', [id]);
@@ -206,6 +206,16 @@ router.put('/:id', authenticate, treeUpload, async (req: Request, res: Response)
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
+};
+
+router.put('/:id', authenticate, treeUpload, updateTree);
+
+// Laravel method-spoofing compatibility: POST /:id with body or query _method=PUT
+router.post('/:id', authenticate, treeUpload, (req: Request, res: Response) => {
+  if (String(req.body?._method || req.query?._method || '').toUpperCase() === 'PUT') {
+    return updateTree(req, res);
+  }
+  return res.status(404).json({ message: `Not found: POST ${req.originalUrl}` });
 });
 
 router.delete('/:id', authenticate, async (req: Request, res: Response) => {

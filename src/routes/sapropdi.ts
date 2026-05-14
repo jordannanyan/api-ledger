@@ -1,8 +1,12 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
 import pool from '../db/connection';
 import { authenticate } from '../middleware/auth';
 
 export const router = Router();
+
+// Parse multipart fields (no files) — for PHP web client (cURL array → multipart).
+const parseFields = multer().none();
 
 router.get('/', authenticate, async (_req: Request, res: Response) => {
   const [rows] = await pool.query('SELECT * FROM sapropdi ORDER BY sapropdi_name');
@@ -16,7 +20,7 @@ router.get('/:id', authenticate, async (req: Request, res: Response) => {
   return res.json({ message: 'Sapropdi fetched successfully', data: list[0] });
 });
 
-router.post('/', authenticate, async (req: Request, res: Response) => {
+router.post('/', authenticate, parseFields, async (req: Request, res: Response) => {
   const { sapropdi_name, unit } = req.body || {};
   const [result] = await pool.query(
     'INSERT INTO sapropdi (sapropdi_name, unit, created_at, updated_at) VALUES (?, ?, NOW(), NOW())',
@@ -27,7 +31,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
   return res.status(201).json({ message: 'Sapropdi created successfully', data: (rows as any[])[0] });
 });
 
-router.put('/:id', authenticate, async (req: Request, res: Response) => {
+router.put('/:id', authenticate, parseFields, async (req: Request, res: Response) => {
   const id = req.params.id;
   const [exists] = await pool.query('SELECT id FROM sapropdi WHERE id = ?', [id]);
   if (!(exists as any[]).length) return res.status(404).json({ message: 'Sapropdi not found' });

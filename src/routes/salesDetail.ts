@@ -1,15 +1,15 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
-import { authenticate } from '../middleware/auth';
 
 export const router = Router();
 
 /**
  * GET /api/sales-detail/:id  — mirrors Laravel SalesDetailController.show().
+ * Public endpoint (matches Laravel routes — outside auth middleware group).
  * Returns the selling record + offtaker + kth (via warehouse) + all farmers
  * whose plots have purchasing records into the same warehouse, plus their plots.
  */
-router.get('/:id', authenticate, async (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
   try {
     const [sellRows] = await pool.query(
