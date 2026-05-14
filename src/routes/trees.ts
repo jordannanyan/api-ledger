@@ -141,14 +141,15 @@ router.post('/', authenticate, treeUpload, async (req: Request, res: Response) =
     if (req.file) await compressImage((req.file as any).path);
 
     const [result] = await pool.query(
-      `INSERT INTO trees (plot_id, farmer_id, tree_name, species, planting_date, qr_code, photo_path, latitude, longitude, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      `INSERT INTO trees (plot_id, farmer_id, tree_name, species, planting_date, qr_code, photo_path, latitude, longitude, accuracy_m, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
       [
         Number(b.plot_id), farmerId, b.tree_name, b.species, b.planting_date,
         b.qr_code ?? null,
         treePhotoToPath(req.file as any),
         b.latitude != null ? Number(b.latitude) : null,
         b.longitude != null ? Number(b.longitude) : null,
+        b.accuracy_m != null ? Number(b.accuracy_m) : null,
       ]
     );
     const id = (result as any).insertId;
@@ -178,6 +179,7 @@ const updateTree = async (req: Request, res: Response) => {
     set('qr_code',       b.qr_code);
     set('latitude',      b.latitude != null ? Number(b.latitude) : undefined);
     set('longitude',     b.longitude != null ? Number(b.longitude) : undefined);
+    set('accuracy_m',    b.accuracy_m != null ? Number(b.accuracy_m) : undefined);
 
     if (b.plot_id !== undefined && b.farmer_id === undefined) {
       const [pr] = await pool.query('SELECT farmer_id FROM plot WHERE id = ?', [b.plot_id]);
