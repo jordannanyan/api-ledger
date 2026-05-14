@@ -4,6 +4,7 @@ import fs from 'fs';
 import multer from 'multer';
 import pool from '../db/connection';
 import { authenticate } from '../middleware/auth';
+import { compressImage } from '../services/imageProcessor';
 
 export const router = Router();
 
@@ -136,6 +137,7 @@ const updateTreeMonitoring = async (req: Request, res: Response) => {
           if (fs.existsSync(oldPath)) { try { fs.unlinkSync(oldPath); } catch (_) {} }
         }
       }
+      await compressImage((req.file as any).path);
       updates.photo_path = monPhotoToPath(req.file as any);
     }
 
@@ -224,6 +226,8 @@ subRouter.post('/', authenticate, monUpload, async (req: Request, res: Response)
     if (!b.measured_at)     return res.status(422).json({ message: 'measured_at is required' });
     if (!b.health_status || !HEALTH_STATUSES.includes(b.health_status))
       return res.status(422).json({ message: 'health_status required (Sehat|Tidak Sehat|Mati)' });
+
+    if (req.file) await compressImage((req.file as any).path);
 
     const [result] = await pool.query(
       `INSERT INTO tree_monitoring

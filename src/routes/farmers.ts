@@ -5,6 +5,7 @@ import multer from 'multer';
 import pool from '../db/connection';
 import { authenticate, hashPassword } from '../middleware/auth';
 import { fileToPath } from '../middleware/upload';
+import { compressImage } from '../services/imageProcessor';
 
 export const router = Router();
 
@@ -99,6 +100,8 @@ router.post('/', authenticate, farmerUpload, async (req: Request, res: Response)
       if ((dupHp as any[]).length) return res.status(422).json({ message: 'Validation error', errors: { no_hp: ['already taken'] } });
     }
 
+    if (req.file) await compressImage((req.file as any).path);
+
     const cols = {
       farmer_name:        b.farmer_name ?? null,
       no_hp:              b.no_hp ?? null,
@@ -169,6 +172,7 @@ const updateFarmer = async (req: Request, res: Response) => {
           if (fs.existsSync(oldPath)) { try { fs.unlinkSync(oldPath); } catch (_) {} }
         }
       }
+      await compressImage((req.file as any).path);
       updates.foto = farmerPhotoToPath(req.file as any);
     }
 

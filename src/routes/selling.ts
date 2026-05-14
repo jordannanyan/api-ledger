@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 import { authenticate } from '../middleware/auth';
 import { upload, fileToPath } from '../middleware/upload';
+import { compressImages } from '../services/imageProcessor';
 import LedgerComputeService from '../services/LedgerComputeService';
 
 export const router = Router();
@@ -86,6 +87,11 @@ router.post('/', authenticate, fileUploads, async (req: Request, res: Response) 
     for (const k of ['warehouse_id', 'offtaker_id', 'commodities_id', 'grade_id']) {
       if (b[k] === undefined || b[k] === '') return res.status(422).json({ message: `${k} is required` });
     }
+
+    await compressImages([
+      files?.upload_invoice?.[0]?.path,
+      files?.upload_do?.[0]?.path,
+    ]);
 
     const total_delivery_cost = b.total_delivery_cost != null
       ? Number(b.total_delivery_cost)
@@ -183,6 +189,10 @@ const updateSelling = async (req: Request, res: Response) => {
       updates.total_delivery_cost = computeTotalDeliveryCost(merged);
     }
 
+    await compressImages([
+      files?.upload_invoice?.[0]?.path,
+      files?.upload_do?.[0]?.path,
+    ]);
     if (files?.upload_invoice?.[0]) updates.upload_invoice = fileToPath(files.upload_invoice[0]);
     if (files?.upload_do?.[0])      updates.upload_do      = fileToPath(files.upload_do[0]);
 

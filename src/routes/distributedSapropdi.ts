@@ -4,6 +4,7 @@ import fs from 'fs';
 import multer from 'multer';
 import pool from '../db/connection';
 import { authenticate } from '../middleware/auth';
+import { compressImage } from '../services/imageProcessor';
 
 export const router = Router();
 
@@ -103,6 +104,8 @@ router.post('/', authenticate, proofUpload, async (req: Request, res: Response) 
     if (!b.commodities_id) return res.status(422).json({ message: 'commodities_id is required' });
     if (!b.sapropdi_id)    return res.status(422).json({ message: 'sapropdi_id is required' });
 
+    if (req.file) await compressImage((req.file as any).path);
+
     const [result] = await pool.query(
       `INSERT INTO distributed_sapropdi
         (date, plot_id, commodities_id, sapropdi_id, quantity, price_per_unit, total_price, upload_proof, created_at, updated_at)
@@ -140,7 +143,10 @@ const updateDistSapropdi = async (req: Request, res: Response) => {
     set('quantity',       b.quantity != null ? Number(b.quantity) : undefined);
     set('price_per_unit', b.price_per_unit != null ? Number(b.price_per_unit) : undefined);
     set('total_price',    b.total_price != null ? Number(b.total_price) : undefined);
-    if (req.file) updates.upload_proof = proofToPath(req.file as any);
+    if (req.file) {
+      await compressImage((req.file as any).path);
+      updates.upload_proof = proofToPath(req.file as any);
+    }
 
     const keys = Object.keys(updates);
     if (keys.length) {

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 import { authenticate } from '../middleware/auth';
 import { upload, fileToPath } from '../middleware/upload';
+import { compressImages } from '../services/imageProcessor';
 import LedgerComputeService from '../services/LedgerComputeService';
 
 export const router = Router();
@@ -133,6 +134,14 @@ router.post('/', authenticate, proofUploads, async (req: Request, res: Response)
       return res.status(422).json({ message: 'Invalid payment_status' });
     }
 
+    // Compress all uploaded proofs in parallel
+    await compressImages([
+      files?.upload_proof_value?.[0]?.path,
+      files?.upload_proof_deduction?.[0]?.path,
+      files?.upload_proof_payment?.[0]?.path,
+      files?.signature_image?.[0]?.path,
+    ]);
+
     const cols = {
       receipt_invoice:        b.receipt_invoice ?? null,
       date:                   b.date ?? null,
@@ -185,6 +194,13 @@ const updatePurchasing = async (req: Request, res: Response) => {
     if (b.payment_status && !PAYMENT_STATUSES.includes(b.payment_status)) {
       return res.status(422).json({ message: 'Invalid payment_status' });
     }
+
+    await compressImages([
+      files?.upload_proof_value?.[0]?.path,
+      files?.upload_proof_deduction?.[0]?.path,
+      files?.upload_proof_payment?.[0]?.path,
+      files?.signature_image?.[0]?.path,
+    ]);
 
     const updates: Record<string, any> = {};
     const setIf = (k: string, v: any) => { if (v !== undefined) updates[k] = v; };

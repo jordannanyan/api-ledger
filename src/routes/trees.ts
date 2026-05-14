@@ -4,6 +4,7 @@ import fs from 'fs';
 import multer from 'multer';
 import pool from '../db/connection';
 import { authenticate } from '../middleware/auth';
+import { compressImage } from '../services/imageProcessor';
 
 export const router = Router();
 
@@ -137,6 +138,8 @@ router.post('/', authenticate, treeUpload, async (req: Request, res: Response) =
       farmerId = (pr as any[])[0].farmer_id;
     }
 
+    if (req.file) await compressImage((req.file as any).path);
+
     const [result] = await pool.query(
       `INSERT INTO trees (plot_id, farmer_id, tree_name, species, planting_date, qr_code, photo_path, latitude, longitude, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
@@ -189,6 +192,7 @@ const updateTree = async (req: Request, res: Response) => {
           if (fs.existsSync(oldPath)) { try { fs.unlinkSync(oldPath); } catch (_) {} }
         }
       }
+      await compressImage((req.file as any).path);
       updates.photo_path = treePhotoToPath(req.file as any);
     }
 

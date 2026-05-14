@@ -4,6 +4,7 @@ import fs from 'fs';
 import multer from 'multer';
 import pool from '../db/connection';
 import { authenticate } from '../middleware/auth';
+import { compressImage } from '../services/imageProcessor';
 
 export const router = Router();
 
@@ -360,6 +361,7 @@ router.post('/:plotId/polygon-points/:seq/photo', authenticate, polyPhotoUpload,
     }
   }
 
+  await compressImage(req.file.path);
   const newPath = polyPhotoToPath(req.file);
   await pool.query(
     'UPDATE plot_polygon_points SET photo_path = ?, updated_at = NOW() WHERE id = ?',
