@@ -23,11 +23,13 @@ const SELECT_WITH_RELATIONS = `
   SELECT
     p.*,
     pl.id AS plot__id, pl.plot_name AS plot__plot_name, pl.farmer_id AS plot__farmer_id,
+    f.id  AS plot__farmer__id, f.farmer_name AS plot__farmer__farmer_name, f.nik AS plot__farmer__nik,
     w.id  AS warehouse__id,  w.warehouse_name AS warehouse__warehouse_name, w.kth_id AS warehouse__kth_id,
     c.id  AS commodity__id,  c.commodities_name AS commodity__commodities_name,
     g.id  AS grade__id,      g.grade_name AS grade__grade_name
   FROM purchasing p
   LEFT JOIN plot pl       ON pl.id = p.plot_id
+  LEFT JOIN farmers f     ON f.id  = pl.farmer_id
   LEFT JOIN warehouse w   ON w.id  = p.warehouse_id
   LEFT JOIN commodities c ON c.id  = p.commodities_id
   LEFT JOIN grade g       ON g.id  = p.grade_id
@@ -36,12 +38,20 @@ const SELECT_WITH_RELATIONS = `
 function inflateRelations(row: any): any {
   const out: any = {};
   const rel: Record<string, any> = { plot: {}, warehouse: {}, commodity: {}, grade: {} };
+  const plotFarmer: any = {};
   for (const k of Object.keys(row)) {
+    if (k.startsWith('plot__farmer__')) {
+      plotFarmer[k.slice('plot__farmer__'.length)] = row[k];
+      continue;
+    }
     const m = k.match(/^(plot|warehouse|commodity|grade)__(.+)$/);
     if (m) rel[m[1]][m[2]] = row[k];
     else out[k] = row[k];
   }
-  out.plot      = rel.plot.id      ? rel.plot      : null;
+  if (rel.plot.id) {
+    rel.plot.farmer = plotFarmer.id ? plotFarmer : null;
+    out.plot = rel.plot;
+  } else out.plot = null;
   out.warehouse = rel.warehouse.id ? rel.warehouse : null;
   out.commodity = rel.commodity.id ? rel.commodity : null;
   out.grade     = rel.grade.id     ? rel.grade     : null;
