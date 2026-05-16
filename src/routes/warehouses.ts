@@ -6,7 +6,15 @@ export const router = Router();
 
 const SELECT_WITH_KTH = `
   SELECT w.*,
-    k.id AS kth__id, k.kth_name AS kth__kth_name, k.entities_id AS kth__entities_id
+    k.id                 AS kth__id,
+    k.kth_name           AS kth__kth_name,
+    k.address            AS kth__address,
+    k.regency            AS kth__regency,
+    k.partnership_period AS kth__partnership_period,
+    k.entities_id        AS kth__entities_id,
+    k.username           AS kth__username,
+    k.created_at         AS kth__created_at,
+    k.updated_at         AS kth__updated_at
   FROM warehouse w
   LEFT JOIN kth k ON k.id = w.kth_id
 `;
